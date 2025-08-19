@@ -1,0 +1,17 @@
+{
+  "name": "miosa-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview --open"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^3.3.1",
+    "@sveltejs/kit": "^2.33.0",
+    "svelte": "^5.0.0",
+    "typescript": "^5.6.2",
+    "vite": "^6.3.0"
+  }
+}
