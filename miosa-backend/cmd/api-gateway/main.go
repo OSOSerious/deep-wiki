@@ -75,7 +75,7 @@ func loadConfig() *Config {
 	config := &Config{
 		Port:      getEnv("PORT", "8080"),
 		GroqKey:   os.Getenv("GROQ_API_KEY"),
-		FastModel: getEnv("FAST_MODEL", "mixtral-8x7b-32768"),
+		FastModel: getEnv("FAST_MODEL", "llama-3.1-8b-instant"),
 		DeepModel: getEnv("DEEP_MODEL", "moonshotai/kimi-k2-instruct"),
 		DBUrl:     os.Getenv("DATABASE_URL"),
 		RedisUrl:  os.Getenv("REDIS_URL"),

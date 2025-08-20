@@ -191,7 +191,9 @@ func (o *Orchestrator) Execute(ctx context.Context, task Task) (*Result, error) 
 	targetAgent, err := Get(AgentType(routing.Agent))
 	if err != nil {
 		// If specific agent not found, use communication agent as fallback
-		log.Printf("Agent %s not found, falling back to communication agent: %v", routing.Agent, err)
+		o.logger.Warn("Agent not found, falling back to communication agent", 
+			zap.String("agent", routing.Agent), 
+			zap.Error(err))
 		targetAgent, err = Get(CommunicationAgent)
 		if err != nil {
 			return &Result{
@@ -434,7 +436,7 @@ Respond with JSON format:
 			},
 		},
 		MaxTokens:   o.config.MaxTokens,
-		Temperature: o.config.Temperature,
+		Temperature: float32(o.config.Temperature),
 	})
 	
 	if err != nil {
