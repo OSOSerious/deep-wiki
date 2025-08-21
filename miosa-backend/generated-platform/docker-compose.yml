@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+  
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  
+  auth-service:
+    build: ./services/auth
+    environment:
+      DATABASE_URL: postgresql://admin:secret@postgres:5432/ecommerce
+      JWT_SECRET: dev-secret-key
+    depends_on:
+      - postgres
+    ports:
+      - "3002:3002"
+  
+  product-service:
+    build: ./services/product
+    environment:
+      DATABASE_URL: postgresql://admin:secret@postgres:5432/ecommerce
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "3003:3003"
+  
+  gateway:
+    build: ./gateway
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:3002
+      PRODUCT_SERVICE_URL: http://product-service:3003
+    depends_on:
+      - auth-service
+      - product-service
+    ports:
+      - "3001:3001"
+  
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:

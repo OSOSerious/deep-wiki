@@ -2,16 +2,37 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/conneroisu/groq-go"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
+	"github.com/sormind/OSA/miosa-backend/internal/agents"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/ai_providers"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/analysis"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/architect"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/communication"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/deployment"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/development"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/monitoring"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/quality"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/recommender"
+	"github.com/sormind/OSA/miosa-backend/internal/agents/strategy"
+	"github.com/sormind/OSA/miosa-backend/internal/config"
+	"github.com/sormind/OSA/miosa-backend/internal/middleware"
+	"github.com/sormind/OSA/miosa-backend/internal/services/collaboration"
+	"github.com/sormind/OSA/miosa-backend/internal/services/gateway"
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -75,7 +96,7 @@ func loadConfig() *Config {
 	config := &Config{
 		Port:      getEnv("PORT", "8080"),
 		GroqKey:   os.Getenv("GROQ_API_KEY"),
-		FastModel: getEnv("FAST_MODEL", "mixtral-8x7b-32768"),
+		FastModel: getEnv("FAST_MODEL", "llama-3.1-8b-instant"),
 		DeepModel: getEnv("DEEP_MODEL", "moonshotai/kimi-k2-instruct"),
 		DBUrl:     os.Getenv("DATABASE_URL"),
 		RedisUrl:  os.Getenv("REDIS_URL"),
@@ -121,27 +142,159 @@ func callGroq(client *groq.Client, model string, prompt string) (string, error) 
 }
 
 func main() {
-	config := loadConfig()
-
-	// Initialize Groq client (will be nil if no key)
-	var client *groq.Client
-	var err error
+	log.Println("🚀 Starting MIOSA API Gateway with Full Integration")
 	
-	if config.GroqKey != "" && config.GroqKey != "gsk_YOUR_ACTUAL_KEY_HERE" {
-		client, err = groq.NewClient(config.GroqKey)
+	// Load configuration
+	cfg := loadConfig()
+	
+	// Initialize logger
+	logger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
+	
+	// Initialize database connection (optional - will work without it)
+	var db *sql.DB
+	if cfg.DBUrl != "" {
+		db, err = sql.Open("postgres", cfg.DBUrl)
 		if err != nil {
-			log.Printf("⚠️  Failed to create Groq client: %v", err)
+			logger.Warn("Database connection failed, continuing without DB", zap.Error(err))
+		} else {
+			db.SetMaxOpenConns(25)
+			db.SetMaxIdleConns(10)
+			db.SetConnMaxLifetime(5 * time.Minute)
+			if err := db.Ping(); err != nil {
+				logger.Warn("Database ping failed", zap.Error(err))
+				db = nil
+			} else {
+				logger.Info("✅ Connected to PostgreSQL")
+				defer db.Close()
+			}
+		}
+	}
+	
+	// Initialize Redis connection (optional - will work without it)
+	var redisClient redis.UniversalClient
+	if cfg.RedisUrl != "" {
+		opts, err := redis.ParseURL(cfg.RedisUrl)
+		if err != nil {
+			logger.Warn("Redis URL parse failed", zap.Error(err))
+		} else {
+			redisClient = redis.NewClient(opts)
+			ctx := context.Background()
+			if err := redisClient.Ping(ctx).Err(); err != nil {
+				logger.Warn("Redis connection failed", zap.Error(err))
+				redisClient = nil
+			} else {
+				logger.Info("✅ Connected to Redis")
+			}
+		}
+	}
+	
+	// Initialize Groq client
+	var groqClient *groq.Client
+	if cfg.GroqKey != "" && cfg.GroqKey != "gsk_YOUR_ACTUAL_KEY_HERE" {
+		groqClient, err = groq.NewClient(cfg.GroqKey)
+		if err != nil {
+			logger.Error("Failed to create Groq client", zap.Error(err))
+		} else {
+			logger.Info("✅ Groq client initialized")
 		}
 	} else {
-		log.Println("⚠️  GROQ_API_KEY not configured. Running in demo mode.")
-		log.Println("   Get your key from https://console.groq.com")
+		logger.Warn("GROQ_API_KEY not configured - API features limited")
 	}
-
-	// Setup Gin
+	
+	// Initialize agent orchestrator
+	var orchestrator *agents.Orchestrator
+	if groqClient != nil {
+		// Register all agents from their packages
+		agents.Register(communication.New(groqClient))
+		agents.Register(analysis.New(groqClient))
+		agents.Register(development.New(groqClient))
+		agents.Register(quality.New(groqClient))
+		agents.Register(deployment.New(groqClient))
+		agents.Register(architect.New(groqClient))
+		agents.Register(monitoring.New(groqClient))
+		agents.Register(strategy.New(groqClient))
+		
+		// Register new agents with Redis support
+		recommenderAgent := recommender.New(groqClient)
+		if redisClient != nil {
+			if rc, ok := redisClient.(*redis.Client); ok {
+				recommenderAgent.SetRedis(rc)
+			}
+			recommenderAgent.SetLogger(logger)
+		}
+		agents.Register(recommenderAgent)
+		
+		aiProvidersAgent := ai_providers.New(groqClient)
+		if redisClient != nil {
+			if rc, ok := redisClient.(*redis.Client); ok {
+				aiProvidersAgent.SetRedis(rc)
+			}
+			aiProvidersAgent.SetLogger(logger)
+		}
+		agents.Register(aiProvidersAgent)
+		
+		orchestrator = agents.NewOrchestrator(groqClient, logger, nil)
+		logger.Info("✅ Agent orchestrator initialized with all agents")
+	}
+	
+	// Setup Gin with production settings
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Logger())
+	
+	// Recovery middleware (must be first)
 	r.Use(gin.Recovery())
+	
+	// Initialize our middleware chain
+	
+	// 1. Security middleware
+	securityConfig := middleware.DefaultSecurityConfig()
+	securityMiddleware := middleware.NewSecurityMiddleware(logger, securityConfig)
+	r.Use(securityMiddleware.Handle())
+	
+	// 2. Logging middleware
+	loggingConfig := &middleware.LoggingConfig{
+		SkipPaths:       []string{"/health", "/metrics"},
+		SlowRequestTime: 2 * time.Second,
+		Level:           "info",
+		Environment:     "production",
+	}
+	loggingMiddleware, err := middleware.NewLoggingMiddleware(loggingConfig)
+	if err != nil {
+		logger.Error("Failed to create logging middleware", zap.Error(err))
+	} else {
+		r.Use(loggingMiddleware.Handle())
+	}
+	
+	// 3. Auth middleware (skip for public endpoints)
+	if db != nil && redisClient != nil {
+		authConfig := &config.AuthConfig{
+			JWTSecret: cfg.JWTSecret,
+		}
+		authMiddleware := middleware.NewAuthMiddleware(authConfig, db, redisClient, logger)
+		// Apply selectively to protected routes
+		r.Use(func(c *gin.Context) {
+			// Skip auth for public endpoints
+			publicPaths := []string{"/health", "/api/auth/login", "/api/auth/register"}
+			for _, path := range publicPaths {
+				if c.Request.URL.Path == path {
+					c.Next()
+					return
+				}
+			}
+			authMiddleware.Handle()(c)
+		})
+	}
+	
+	// 4. Rate limiting middleware
+	if redisClient != nil {
+		rateLimitConfig := middleware.DefaultRateLimitConfig()
+		rateLimitMiddleware := middleware.NewRateLimitMiddleware(redisClient, logger, rateLimitConfig)
+		r.Use(rateLimitMiddleware.Handle())
+	}
 
 	// CORS configuration
 	r.Use(cors.New(cors.Config{
@@ -153,162 +306,72 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Initialize gateway handlers
+	handlers := gateway.NewHandlers(orchestrator, groqClient, logger)
+	
+	// Initialize collaboration handlers (only if Redis is available)
+	var collabHandlers *collaboration.Handlers
+	if redisClient != nil {
+		// Type assertion for Redis client
+		if rc, ok := redisClient.(*redis.Client); ok {
+			collabHandlers = collaboration.NewHandlers(orchestrator, rc, logger)
+		}
+	}
+	
 	// Health check
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, Response{
-			Success: true,
-			Message: "MIOSA API is running",
-			Data: map[string]interface{}{
-				"version": "1.0.0",
-				"models": map[string]string{
-					"fast": config.FastModel,
-					"deep": config.DeepModel,
-				},
-			},
-		})
-	})
+	r.GET("/health", handlers.HealthCheck)
 
 	// API routes
 	api := r.Group("/api")
 	{
-		// Fast chat endpoint (Mixtral)
-		api.POST("/chat", func(c *gin.Context) {
-			var req ChatRequest
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, Response{
-					Success: false,
-					Error:   err.Error(),
-				})
-				return
-			}
+		// Main agent execution endpoint
+		api.POST("/agents/execute", handlers.ExecuteAgent)
+		
+		// Legacy chat endpoint for backward compatibility
+		api.POST("/chat", handlers.Chat)
+		
+		// Collaboration endpoints (only if handlers available)
+		if collabHandlers != nil {
+			api.POST("/collaboration/execute", collabHandlers.ExecuteCollaborativeTask)
+		}
 
-			if client == nil {
-				c.JSON(http.StatusOK, Response{
-					Success: true,
-					Data:    fmt.Sprintf("Demo response: You said '%s'. Please add your GROQ_API_KEY to get real AI responses.", req.Message),
-					Model:   "demo",
-				})
-				return
-			}
-
-			response, err := callGroq(client, config.FastModel, req.Message)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, Response{
-					Success: false,
-					Error:   fmt.Sprintf("Failed to get response: %v", err),
-				})
-				return
-			}
-
-			c.JSON(http.StatusOK, Response{
-				Success: true,
-				Data:    response,
-				Model:   config.FastModel,
-			})
-		})
-
-		// Deep analysis endpoint (Kimi K2)
-		api.POST("/analyze", func(c *gin.Context) {
-			var req AnalyzeRequest
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, Response{
-					Success: false,
-					Error:   err.Error(),
-				})
-				return
-			}
-
-			prompt := fmt.Sprintf("Analyze the following %s content:\n\n%s", req.Type, req.Content)
-			response, err := callGroq(client, config.DeepModel, prompt)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, Response{
-					Success: false,
-					Error:   fmt.Sprintf("Failed to analyze: %v", err),
-				})
-				return
-			}
-
-			c.JSON(http.StatusOK, Response{
-				Success: true,
-				Data:    response,
-				Model:   config.DeepModel,
-			})
-		})
-
-		// Consultation endpoint (phase-based routing)
-		api.POST("/consultation", func(c *gin.Context) {
-			var req ConsultationRequest
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, Response{
-					Success: false,
-					Error:   err.Error(),
-				})
-				return
-			}
-
-			// Choose model based on phase
-			model := config.FastModel
-			if req.Phase == "deep-dive" {
-				model = config.DeepModel
-			}
-
-			prompt := fmt.Sprintf("Topic: %s\nContext: %s\nPhase: %s\n\nProvide consultation:", 
-				req.Topic, req.Context, req.Phase)
-			
-			response, err := callGroq(client, model, prompt)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, Response{
-					Success: false,
-					Error:   fmt.Sprintf("Failed to consult: %v", err),
-				})
-				return
-			}
-
-			c.JSON(http.StatusOK, Response{
-				Success: true,
-				Data:    response,
-				Model:   model,
-			})
-		})
-
-		// Code generation endpoint (Kimi K2)
-		api.POST("/generate", func(c *gin.Context) {
-			var req GenerateRequest
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, Response{
-					Success: false,
-					Error:   err.Error(),
-				})
-				return
-			}
-
-			prompt := fmt.Sprintf("Generate %s:\nDescription: %s\nContext: %v", 
-				req.Type, req.Description, req.Context)
-			
-			response, err := callGroq(client, config.DeepModel, prompt)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, Response{
-					Success: false,
-					Error:   fmt.Sprintf("Failed to generate: %v", err),
-				})
-				return
-			}
-
-			c.JSON(http.StatusOK, Response{
-				Success: true,
-				Data:    response,
-				Model:   config.DeepModel,
-			})
-		})
+		// Additional endpoints can be added here as needed
+		// All complex logic should go through the agent system
 	}
 
-	// Start server
-	log.Printf("🚀 MIOSA API starting on port %s", config.Port)
-	log.Printf("✅ Models configured:")
-	log.Printf("   📱 Communication (Fast): %s", config.FastModel)
-	log.Printf("   🧠 Analysis (Deep): %s", config.DeepModel)
+	// Setup graceful shutdown
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: r,
+	}
 	
-	if err := r.Run(":" + config.Port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	// Start server in goroutine
+	go func() {
+		logger.Info("🚀 MIOSA API Gateway starting",
+			zap.String("port", cfg.Port),
+			zap.Bool("database", db != nil),
+			zap.Bool("redis", redisClient != nil),
+			zap.Bool("groq", groqClient != nil))
+		
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+	
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	
+	logger.Info("Shutting down server...")
+	
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
+	
+	logger.Info("Server exited properly")
 }

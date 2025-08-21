@@ -1,0 +1,41 @@
+# Redis ACL configuration for MIOSA multi-agent system
+# Each agent has its own user with specific permissions
+
+# Default user (disabled for security)
+user default on nopass ~* &* +@all
+
+# Orchestrator agent - full access to coordinate agents
+user orchestrator on >orchestrator_pass ~* &* +@all
+
+# Analysis agent - access to analysis: and task: prefixes
+user analysis on >analysis_pass ~analysis:* ~task:* ~pattern:* +@all -@dangerous
+
+# Development agent - access to code: and task: prefixes  
+user development on >dev_pass ~code:* ~task:* ~cache:* +@all -@dangerous
+
+# Quality agent - read access to code, write to test results
+user quality on >quality_pass ~code:* ~test:* ~task:* +@read +@write +@list -@dangerous
+
+# Deployment agent - access to deploy: and config: prefixes
+user deployment on >deploy_pass ~deploy:* ~config:* ~task:* +@all -@dangerous
+
+# Communication agent - pub/sub and message queues
+user communication on >comm_pass ~msg:* ~queue:* ~task:* +@all -@dangerous
+
+# Monitoring agent - read-only access for metrics
+user monitoring on >monitor_pass ~* +@read +ping +info +client +config|get
+
+# Architecture agent - design and schema access
+user architect on >architect_pass ~design:* ~schema:* ~task:* +@all -@dangerous
+
+# Strategy agent - planning and roadmap access
+user strategy on >strategy_pass ~plan:* ~roadmap:* ~task:* +@all -@dangerous
+
+# Task queue system user - manages distributed task queue
+user taskqueue on >queue_pass ~queue:* ~task:* ~lock:* +@all -@dangerous
+
+# Self-improvement engine - pattern and metric storage
+user improvement on >improve_pass ~pattern:* ~metric:* ~improvement:* +@all -@dangerous
+
+# Collaboration service - coordinates multi-agent tasks
+user collaboration on >collab_pass ~collab:* ~session:* ~task:* +@all -@dangerous

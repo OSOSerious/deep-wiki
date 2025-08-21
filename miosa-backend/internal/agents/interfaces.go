@@ -20,6 +20,9 @@ const (
 	QualityAgent       AgentType = "quality"
 	MonitoringAgent    AgentType = "monitoring"
 	IntegrationAgent   AgentType = "integration"
+	ArchitectAgent     AgentType = "architect"
+	RecommenderAgent   AgentType = "recommender"
+	AIProvidersAgent   AgentType = "ai_providers"
 )
 
 // Agent is the interface that all agents must implement
@@ -101,4 +104,101 @@ const (
 	StatusCompleted  ExecutionStatus = "completed"
 	StatusFailed     ExecutionStatus = "failed"
 	StatusCancelled  ExecutionStatus = "cancelled"
+)
+
+// Tool represents a tool available to agents
+type Tool interface {
+	GetName() string
+	GetDescription() string
+	Execute(ctx context.Context, input map[string]interface{}) (interface{}, error)
+	Validate(input map[string]interface{}) error
+}
+
+// Workflow represents a multi-agent workflow
+type Workflow struct {
+	ID          uuid.UUID       `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Steps       []WorkflowStep  `json:"steps"`
+	Status      ExecutionStatus `json:"status"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// WorkflowStep represents a step in a workflow
+type WorkflowStep struct {
+	ID           uuid.UUID              `json:"id"`
+	Name         string                 `json:"name"`
+	AgentType    AgentType              `json:"agent_type"`
+	Task         Task                   `json:"task"`
+	Dependencies []uuid.UUID            `json:"dependencies"`
+	Status       ExecutionStatus        `json:"status"`
+	Result       *Result                `json:"result,omitempty"`
+	RetryCount   int                    `json:"retry_count"`
+	MaxRetries   int                    `json:"max_retries"`
+	Timeout      time.Duration          `json:"timeout"`
+	Metadata     map[string]interface{} `json:"metadata"`
+}
+
+// AgentPool represents a pool of agents
+type AgentPool interface {
+	GetAgent(agentType AgentType) (Agent, error)
+	RegisterAgent(agent Agent) error
+	UnregisterAgent(agentType AgentType) error
+	ListAgents() []AgentType
+	HealthCheck(ctx context.Context) map[AgentType]bool
+}
+
+// MemoryStore represents a memory store for agents
+type MemoryStore interface {
+	Get(ctx context.Context, key string) (interface{}, error)
+	Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error
+	Delete(ctx context.Context, key string) error
+	Clear(ctx context.Context) error
+	GetHistory(ctx context.Context, sessionID uuid.UUID) ([]Message, error)
+	AddMessage(ctx context.Context, sessionID uuid.UUID, message Message) error
+}
+
+// EventType represents the type of event
+type EventType string
+
+const (
+	EventTaskCreated   EventType = "task_created"
+	EventTaskStarted   EventType = "task_started"
+	EventTaskCompleted EventType = "task_completed"
+	EventTaskFailed    EventType = "task_failed"
+	EventAgentStarted  EventType = "agent_started"
+	EventAgentFinished EventType = "agent_finished"
+	EventToolExecuted  EventType = "tool_executed"
+)
+
+// Event represents an event in the system
+type Event struct {
+	ID        uuid.UUID              `json:"id"`
+	Type      EventType              `json:"type"`
+	Source    string                 `json:"source"`
+	Timestamp time.Time              `json:"timestamp"`
+	Data      map[string]interface{} `json:"data"`
+	Metadata  map[string]string      `json:"metadata"`
+}
+
+// EventHandler handles events
+type EventHandler interface {
+	Handle(ctx context.Context, event Event) error
+}
+
+// Phase represents a phase in the MIOSA loop
+type Phase string
+
+const (
+	PhaseOnboarding   Phase = "onboarding"
+	PhaseConsultation Phase = "consultation"
+	PhaseAnalysis     Phase = "analysis"
+	PhaseStrategy     Phase = "strategy"
+	PhaseDevelopment  Phase = "development"
+	PhaseTesting      Phase = "testing"
+	PhaseDeployment   Phase = "deployment"
+	PhaseMonitoring   Phase = "monitoring"
+	PhaseOptimization Phase = "optimization"
+	PhaseExpansion    Phase = "expansion"
 )

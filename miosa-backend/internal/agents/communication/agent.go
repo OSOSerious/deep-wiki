@@ -68,8 +68,8 @@ func (a *CommunicationAgent) Execute(ctx context.Context, task agents.Task) (*ag
 		Model:       groq.ChatModel(a.config.Model),
 		Messages:    messages,
 		MaxTokens:   a.config.MaxTokens,
-		Temperature: a.config.Temperature,
-		TopP:        a.config.TopP,
+		Temperature: float32(a.config.Temperature),
+		TopP:        float32(a.config.TopP),
 	})
 	
 	if err != nil {
@@ -111,7 +111,11 @@ func (a *CommunicationAgent) Execute(ctx context.Context, task agents.Task) (*ag
 // buildConversationContext builds the conversation context from task history
 func (a *CommunicationAgent) buildConversationContext(task agents.Task) []groq.ChatCompletionMessage {
 	// System prompt based on phase
-	systemPrompt := a.getSystemPrompt(task.Context.Phase)
+	phase := ""
+	if task.Context != nil {
+		phase = task.Context.Phase
+	}
+	systemPrompt := a.getSystemPrompt(phase)
 	
 	messages := []groq.ChatCompletionMessage{
 		{
@@ -120,16 +124,18 @@ func (a *CommunicationAgent) buildConversationContext(task agents.Task) []groq.C
 		},
 	}
 	
-	// Add conversation history
-	for _, msg := range task.Context.History {
-		role := "user"
-		if msg.Role == "assistant" {
-			role = "assistant"
+	// Add conversation history if context exists
+	if task.Context != nil {
+		for _, msg := range task.Context.History {
+			role := "user"
+			if msg.Role == "assistant" {
+				role = "assistant"
+			}
+			messages = append(messages, groq.ChatCompletionMessage{
+				Role:    groq.Role(role),
+				Content: msg.Content,
+			})
 		}
-		messages = append(messages, groq.ChatCompletionMessage{
-			Role:    role,
-			Content: msg.Content,
-		})
 	}
 	
 	return messages
