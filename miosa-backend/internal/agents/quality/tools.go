@@ -24,11 +24,15 @@ func (t *QualityReviewTool) GetDescription() string {
 }
 
 // Execute runs the tool using the agent logic.
-func (t *QualityReviewTool) Execute(ctx context.Context, params map[string]string) (string, error) {
+func (t *QualityReviewTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
     // Expecting code snippet or identifier in params["input"]
-    input := strings.TrimSpace(params["input"])
+    inputRaw, ok := params["input"]
+    if !ok {
+        return nil, fmt.Errorf("missing 'input' parameter for quality review")
+    }
+    input := strings.TrimSpace(fmt.Sprintf("%v", inputRaw))
     if input == "" {
-        return "", fmt.Errorf("missing 'input' parameter for quality review")
+        return nil, fmt.Errorf("empty 'input' parameter for quality review")
     }
 
     result, err := t.agent.Execute(ctx, agents.Task{
@@ -36,9 +40,16 @@ func (t *QualityReviewTool) Execute(ctx context.Context, params map[string]strin
         Parameters: params,
     })
     if err != nil {
-        return "", err
+        return nil, err
     }
     return result.Output, nil
+}
+
+func (t *QualityReviewTool) Validate(input map[string]interface{}) error {
+    if _, ok := input["input"]; !ok {
+        return fmt.Errorf("missing required parameter: input")
+    }
+    return nil
 }
 
 // -------- Another example tool --------
@@ -54,20 +65,31 @@ func (t *QuickConfidenceTool) GetDescription() string {
     return "Quickly estimate QA confidence score given basic metrics."
 }
 
-func (t *QuickConfidenceTool) Execute(ctx context.Context, params map[string]string) (string, error) {
+func (t *QuickConfidenceTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+    // Convert params to string map
+    strParams := make(map[string]string)
+    for k, v := range params {
+        strParams[k] = fmt.Sprintf("%v", v)
+    }
+    
     // Read numeric params or apply defaults
     metrics := Metrics{
-        TotalFiles:          parseInt(params["total_files"], 1),
-        TotalLines:          parseInt(params["total_lines"], 100),
-        IssuesFound:         parseInt(params["issues_found"], 0),
-        TestsGenerated:      parseInt(params["tests_generated"], 1),
-        TestsPassed:         parseInt(params["tests_passed"], 1),
-        TestsFailed:         parseInt(params["tests_failed"], 0),
-        CodeComplexityScore: parseFloat(params["complexity"], 1.0),
-        CoveragePercent:     parseFloat(params["coverage"], 100.0),
+        TotalFiles:          parseInt(strParams["total_files"], 1),
+        TotalLines:          parseInt(strParams["total_lines"], 100),
+        IssuesFound:         parseInt(strParams["issues_found"], 0),
+        TestsGenerated:      parseInt(strParams["tests_generated"], 1),
+        TestsPassed:         parseInt(strParams["tests_passed"], 1),
+        TestsFailed:         parseInt(strParams["tests_failed"], 0),
+        CodeComplexityScore: parseFloat(strParams["complexity"], 1.0),
+        CoveragePercent:     parseFloat(strParams["coverage"], 100.0),
     }
     conf := (&QualityAgent{}).calculateConfidence(metrics)
     return fmt.Sprintf("Estimated Confidence: %.1f / 10", conf), nil
+}
+
+func (t *QuickConfidenceTool) Validate(input map[string]interface{}) error {
+    // All parameters are optional with defaults
+    return nil
 }
 
 // -------- Registration helper --------
@@ -117,5 +139,5 @@ func parseFloat(s string, def float64) float64 {
     }
     return v
 }
-package quality
+
 // Tools implementation

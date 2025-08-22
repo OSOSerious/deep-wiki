@@ -321,4 +321,6 @@ func GetEvaluation(agentType AgentType) (*AgentEvaluation, error) {
         FailedExecutions:    eval.FailedExecutions,
         AverageConfidence:   eval.AverageConfidence,
         AverageExecutionMS:  eval.AverageExecutionMS,
-        LastEvaluated:       eval.Last
+        LastEvaluated:       eval.LastEvaluated,
+    }, nil
+}

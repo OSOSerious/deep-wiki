@@ -139,14 +139,14 @@ Subject: %s
 `, m.TotalFiles, m.TotalLines, m.IssuesFound, m.TestsGenerated, m.TestsPassed, m.TestsFailed, m.CodeComplexityScore, m.CoveragePercent, subject)
 
     resp, err := a.groqClient.ChatCompletion(ctx, groq.ChatCompletionRequest{
-        Model: a.config.Model,
+        Model: groq.ChatModel(a.config.Model),
         Messages: []groq.ChatCompletionMessage{
             {Role: "system", Content: "You are an AI specialized in code quality and QA reporting."},
             {Role: "user", Content: prompt},
         },
         MaxTokens:   a.config.MaxTokens,
-        Temperature: a.config.Temperature,
-        TopP:        a.config.TopP,
+        Temperature: float32(a.config.Temperature),
+        TopP:        float32(a.config.TopP),
     })
     if err != nil {
         return DoingNotes{}, err

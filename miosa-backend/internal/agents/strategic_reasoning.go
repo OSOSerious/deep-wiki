@@ -61,12 +61,16 @@ type StrategicExecutor struct {
     MinCandidates int
 }
 
-func (se *StrategicExecutor) Name() string {
-    return se.Wrapped.Name()
+func (se *StrategicExecutor) GetType() AgentType {
+    return se.Wrapped.GetType()
 }
 
-func (se *StrategicExecutor) Capabilities() []string {
-    return se.Wrapped.Capabilities()
+func (se *StrategicExecutor) GetCapabilities() []Capability {
+    return se.Wrapped.GetCapabilities()
+}
+
+func (se *StrategicExecutor) GetDescription() string {
+    return se.Wrapped.GetDescription()
 }
 
 func (se *StrategicExecutor) Execute(ctx context.Context, task Task) (*Result, error) {
