@@ -1,0 +1,261 @@
+/* OSA IDE Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.ide-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.sidebar {
+  width: 300px;
+  background: #252526;
+  border-right: 1px solid #3e3e42;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 500px;
+}
+
+.sidebar-header {
+  padding: 12px;
+  background: #2d2d30;
+  border-bottom: 1px solid #3e3e42;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar {
+  background: #2d2d30;
+  border-bottom: 1px solid #3e3e42;
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.search-box {
+  background: #3c3c3c;
+  border: 1px solid #3e3e42;
+  color: #d4d4d4;
+  padding: 6px 8px;
+  border-radius: 2px;
+  font-size: 12px;
+  flex: 1;
+  outline: none;
+}
+
+.search-box:focus {
+  border-color: #007acc;
+}
+
+.btn {
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn:hover {
+  background: #1177bb;
+}
+
+.btn:disabled {
+  background: #3e3e42;
+  cursor: not-allowed;
+}
+
+.file-explorer {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.file-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  border-bottom: 1px solid #2d2d30;
+  user-select: none;
+}
+
+.file-item:hover {
+  background: #2a2d2e;
+}
+
+.file-item.selected {
+  background: #094771;
+}
+
+.file-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.folder-icon {
+  color: #dcb67a;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tabs {
+  background: #2d2d30;
+  border-bottom: 1px solid #3e3e42;
+  display: flex;
+  min-height: 35px;
+  overflow-x: auto;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: #2d2d30;
+  border-right: 1px solid #3e3e42;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+.tab.active {
+  background: #1e1e1e;
+}
+
+.tab-close {
+  margin-left: 8px;
+  cursor: pointer;
+  opacity: 0.6;
+  padding: 2px;
+  border-radius: 2px;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.editor-container {
+  flex: 1;
+  position: relative;
+  background: #1e1e1e;
+}
+
+.status-bar {
+  height: 24px;
+  background: #007acc;
+  color: white;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  justify-content: space-between;
+}
+
+.recent-files {
+  max-height: 200px;
+  overflow-y: auto;
+  border-top: 1px solid #3e3e42;
+}
+
+.recent-header {
+  padding: 8px 12px;
+  background: #2d2d30;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cccccc;
+  border-bottom: 1px solid #3e3e42;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 14px;
+  color: #888;
+}
+
+.error {
+  color: #f48771;
+  background: #5a1d1d;
+  padding: 8px 12px;
+  margin: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.empty-editor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* CodeMirror overrides */
+.cm-editor {
+  height: 100%;
+  font-size: 14px;
+}
+
+.cm-focused {
+  outline: none;
+}
+
+.cm-scroller {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
