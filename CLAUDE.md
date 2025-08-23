@@ -114,3 +114,7 @@ Frontend tests in `miosa-web/tests/`:
 - Component tests in `components/`
 - Route tests in `routes/`
 - Utility tests in `utils/`
+
+## Task Master AI Instructions
+**Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
+@./.taskmaster/CLAUDE.md

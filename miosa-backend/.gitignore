@@ -1,8 +1,58 @@
+# Dependencies
 /vendor
+node_modules/
+
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-.env
 /bin
+
+# Environment
+.env
+.env.local
+
+# Task Master
+.taskmaster/
+tasks.json
+complexity-report.json
+*.taskmaster.backup
+
+# Testing
+coverage.out
+coverage.html
+*.test
+test_*.go
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Generated files
+generated-platform/
+generated-platforms/
+PR_TEST_RESULTS.md
+CODE_GENERATION_FLOW.md
+TASK_MASTER_GUIDE.md
+current-prd.txt
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Redis
+dump.rdb
+
+# API Gateway binary
+api-gateway
