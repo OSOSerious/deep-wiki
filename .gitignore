@@ -34,3 +34,19 @@ task-*.txt
 **/claude-code-commands.md
 **/taskmaster-commands.sh
 **/*taskmaster* 
+
+# Task files
+tasks.json
+tasks/
+
+# SvelteKit
+miosa-web/.svelte-kit/
+miosa-web/build/
+miosa-web/.vite/
+
+# IDE and editor files
+.zed/
+opencode.json
+
+# Vite dependencies cache
+miosa-web/node_modules/.vite/ 

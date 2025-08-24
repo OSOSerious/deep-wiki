@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ososerious/miosa-backend/internal/agents"
+	"github.com/sormind/OSA/miosa-backend/internal/agents"
 )
 
 // CommandExecutor handles the execution of Claude Code commands

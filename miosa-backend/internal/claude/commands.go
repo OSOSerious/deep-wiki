@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ososerious/miosa-backend/internal/agents"
+	"github.com/sormind/OSA/miosa-backend/internal/agents"
 )
 
 // CommandType represents a Claude Code slash command

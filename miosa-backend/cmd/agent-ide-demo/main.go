@@ -1,0 +1,482 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// AgentTask represents a task for the multi-agent system
+type AgentTask struct {
+	Description string
+	Context     map[string]interface{}
+	AgentType   string
+}
+
+// LLMRequest represents a request to the LLM
+type LLMRequest struct {
+	Model    string                 `json:"model"`
+	Messages []Message              `json:"messages"`
+	Options  map[string]interface{} `json:"options,omitempty"`
+}
+
+// Message represents a chat message
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// LLMResponse represents the LLM response
+type LLMResponse struct {
+	Choices []struct {
+		Message Message `json:"message"`
+	} `json:"choices"`
+}
+
+// IDEClient handles IDE server communication
+type IDEClient struct {
+	BaseURL string
+}
+
+// Agent represents an intelligent agent
+type Agent struct {
+	Name        string
+	Type        string
+	SystemPrompt string
+	LLMEndpoint string
+	APIKey      string
+}
+
+// FileContent for IDE operations
+type FileContent struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+// SaveFile saves content via IDE API
+func (c *IDEClient) SaveFile(path string, content string) error {
+	payload := FileContent{
+		Path:    path,
+		Content: content,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	resp, err := http.Post(
+		fmt.Sprintf("%s/api/ide/file", c.BaseURL),
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("error: %s", string(body))
+	}
+
+	return nil
+}
+
+// CallLLM makes a request to the LLM
+func (a *Agent) CallLLM(ctx context.Context, userPrompt string) (string, error) {
+	// Use Groq API for demonstration (fast and free tier available)
+	url := "https://api.groq.com/openai/v1/chat/completions"
+	
+	messages := []Message{
+		{Role: "system", Content: a.SystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+
+	requestBody := map[string]interface{}{
+		"model": "llama3-70b-8192", // Using Llama 3 70B for better results
+		"messages": messages,
+		"temperature": 0.7,
+		"max_tokens": 2000,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("LLM API error: %s", string(body))
+	}
+
+	var llmResp LLMResponse
+	if err := json.Unmarshal(body, &llmResp); err != nil {
+		return "", err
+	}
+
+	if len(llmResp.Choices) > 0 {
+		return llmResp.Choices[0].Message.Content, nil
+	}
+
+	return "", fmt.Errorf("no response from LLM")
+}
+
+// Execute performs the agent's task
+func (a *Agent) Execute(ctx context.Context, task AgentTask, ideClient *IDEClient) error {
+	fmt.Printf("\n%s[%s]%s %s\n", getAgentColor(a.Type), a.Type, "\033[0m", task.Description)
+	
+	// Generate code using LLM
+	response, err := a.CallLLM(ctx, task.Description)
+	if err != nil {
+		// Fallback to local generation if API fails
+		fmt.Printf("  ⚠️  LLM API error: %v\n", err)
+		fmt.Printf("  📝 Using local generation as fallback\n")
+		response = a.generateLocally(task)
+	}
+	
+	// Extract file path and content from response
+	filePath, content := parseAgentResponse(response, task)
+	
+	// Save to IDE
+	rootPath := "/Users/ososerious/OSA/miosa-backend/internal"
+	fullPath := filepath.Join(rootPath, filePath)
+	
+	if err := ideClient.SaveFile(fullPath, content); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+	
+	fmt.Printf("  ✓ Created: %s\n", filePath)
+	return nil
+}
+
+// generateLocally provides fallback code generation
+func (a *Agent) generateLocally(task AgentTask) string {
+	switch a.Type {
+	case "Analysis":
+		return fmt.Sprintf(`# Analysis: %s
+
+## Requirements
+- %s
+
+## Technical Approach
+- Implement using Go best practices
+- Follow clean architecture principles
+- Include comprehensive error handling
+
+## Success Criteria
+- Code is maintainable and testable
+- Performance metrics meet requirements
+- Security best practices followed
+
+Generated at: %s`, task.Description, task.Description, time.Now().Format(time.RFC3339))
+	
+	case "Architecture":
+		return fmt.Sprintf(`package models
+
+// Generated by Architecture Agent
+// Task: %s
+
+import "time"
+
+type Entity struct {
+    ID        string    ` + "`json:\"id\"`" + `
+    Name      string    ` + "`json:\"name\"`" + `
+    CreatedAt time.Time ` + "`json:\"created_at\"`" + `
+    UpdatedAt time.Time ` + "`json:\"updated_at\"`" + `
+}`, task.Description)
+	
+	case "Development":
+		return fmt.Sprintf(`package handlers
+
+// Generated by Development Agent
+// Task: %s
+
+import (
+    "encoding/json"
+    "net/http"
+)
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+    // Implementation for: %s
+    response := map[string]string{
+        "status": "success",
+        "message": "Handler implemented",
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
+}`, task.Description, task.Description)
+	
+	case "Testing":
+		return fmt.Sprintf(`package handlers_test
+
+// Generated by Testing Agent
+// Task: %s
+
+import (
+    "testing"
+    "net/http/httptest"
+)
+
+func TestHandler(t *testing.T) {
+    // Test implementation for: %s
+    req := httptest.NewRequest("GET", "/", nil)
+    w := httptest.NewRecorder()
+    
+    // Call handler
+    // Handler(w, req)
+    
+    if w.Code != 200 {
+        t.Errorf("expected 200, got %%d", w.Code)
+    }
+}`, task.Description, task.Description)
+	
+	default:
+		return fmt.Sprintf("// Generated by %s Agent\n// Task: %s\n\n// Implementation pending", a.Type, task.Description)
+	}
+}
+
+// parseAgentResponse extracts file path and content from agent response
+func parseAgentResponse(response string, task AgentTask) (string, string) {
+	// Try to extract file path from response
+	// For now, use convention based on agent type
+	agentType := task.AgentType
+	
+	var filePath string
+	switch agentType {
+	case "Analysis":
+		filePath = fmt.Sprintf("docs/analysis_%d.md", time.Now().Unix())
+	case "Architecture":
+		filePath = fmt.Sprintf("models/model_%d.go", time.Now().Unix())
+	case "Development":
+		filePath = fmt.Sprintf("handlers/handler_%d.go", time.Now().Unix())
+	case "Testing":
+		filePath = fmt.Sprintf("tests/test_%d.go", time.Now().Unix())
+	case "Quality":
+		filePath = fmt.Sprintf("quality/metrics_%d.go", time.Now().Unix())
+	default:
+		filePath = fmt.Sprintf("output/file_%d.txt", time.Now().Unix())
+	}
+	
+	// If response contains actual code markers, extract it
+	if strings.Contains(response, "```") {
+		parts := strings.Split(response, "```")
+		if len(parts) >= 2 {
+			// Remove language identifier if present
+			code := parts[1]
+			if idx := strings.Index(code, "\n"); idx > 0 {
+				code = code[idx+1:]
+			}
+			return filePath, strings.TrimSpace(code)
+		}
+	}
+	
+	return filePath, response
+}
+
+// getAgentColor returns terminal color for agent type
+func getAgentColor(agentType string) string {
+	colors := map[string]string{
+		"Analysis":     "\033[36m", // Cyan
+		"Architecture": "\033[33m", // Yellow
+		"Development":  "\033[32m", // Green
+		"Testing":      "\033[35m", // Magenta
+		"Quality":      "\033[34m", // Blue
+		"Deployment":   "\033[31m", // Red
+	}
+	if color, ok := colors[agentType]; ok {
+		return color
+	}
+	return "\033[37m" // White
+}
+
+// OrchestrateAgents coordinates multiple agents for a task
+func OrchestrateAgents(ctx context.Context, mainTask string, ideClient *IDEClient) error {
+	// Get API key from environment
+	apiKey := os.Getenv("GROQ_API_KEY")
+	if apiKey == "" {
+		fmt.Println("⚠️  GROQ_API_KEY not set, using local generation mode")
+	}
+	
+	// Define specialized agents
+	agents := []Agent{
+		{
+			Name: "Analysis Agent",
+			Type: "Analysis",
+			SystemPrompt: `You are an Analysis Agent. Your role is to analyze requirements and create detailed technical specifications.
+When given a task, provide:
+1. Clear requirements breakdown
+2. Technical constraints and considerations
+3. Success criteria
+4. Risk analysis
+Format your response as a markdown document.`,
+			APIKey: apiKey,
+		},
+		{
+			Name: "Architecture Agent", 
+			Type: "Architecture",
+			SystemPrompt: `You are an Architecture Agent. Your role is to design system architecture and data models.
+When given a task, generate:
+1. Go structs with proper JSON tags
+2. Clear separation of concerns
+3. Interface definitions where appropriate
+4. Follow Go best practices
+Return only the code without explanations.`,
+			APIKey: apiKey,
+		},
+		{
+			Name: "Development Agent",
+			Type: "Development",
+			SystemPrompt: `You are a Development Agent. Your role is to implement business logic and API handlers.
+When given a task, generate:
+1. Complete Go handler functions
+2. Proper error handling
+3. JSON request/response handling
+4. Follow RESTful conventions
+Return only the code without explanations.`,
+			APIKey: apiKey,
+		},
+		{
+			Name: "Testing Agent",
+			Type: "Testing", 
+			SystemPrompt: `You are a Testing Agent. Your role is to create comprehensive test suites.
+When given a task, generate:
+1. Unit tests using Go's testing package
+2. Table-driven tests where appropriate
+3. Mock objects as needed
+4. Good test coverage
+Return only the code without explanations.`,
+			APIKey: apiKey,
+		},
+		{
+			Name: "Quality Agent",
+			Type: "Quality",
+			SystemPrompt: `You are a Quality Agent. Your role is to ensure code quality and add monitoring.
+When given a task, generate:
+1. Metrics and monitoring code
+2. Logging implementation
+3. Performance optimizations
+4. Security validations
+Return only the code without explanations.`,
+			APIKey: apiKey,
+		},
+	}
+	
+	// Break down main task into agent-specific subtasks
+	tasks := []AgentTask{
+		{
+			Description: fmt.Sprintf("Analyze requirements for: %s. Create a detailed specification document.", mainTask),
+			AgentType:   "Analysis",
+			Context:     map[string]interface{}{"phase": "analysis"},
+		},
+		{
+			Description: fmt.Sprintf("Design data models and interfaces for: %s. Create Go structs.", mainTask),
+			AgentType:   "Architecture",
+			Context:     map[string]interface{}{"phase": "design"},
+		},
+		{
+			Description: fmt.Sprintf("Implement API handlers for: %s. Create REST endpoints.", mainTask),
+			AgentType:   "Development",
+			Context:     map[string]interface{}{"phase": "implementation"},
+		},
+		{
+			Description: fmt.Sprintf("Create unit tests for: %s. Ensure comprehensive coverage.", mainTask),
+			AgentType:   "Testing",
+			Context:     map[string]interface{}{"phase": "testing"},
+		},
+		{
+			Description: fmt.Sprintf("Add monitoring and metrics for: %s. Include performance tracking.", mainTask),
+			AgentType:   "Quality",
+			Context:     map[string]interface{}{"phase": "quality"},
+		},
+	}
+	
+	// Execute tasks with appropriate agents
+	for i, task := range tasks {
+		// Find the right agent for the task
+		for _, agent := range agents {
+			if agent.Type == task.AgentType {
+				time.Sleep(500 * time.Millisecond) // Visual effect
+				if err := agent.Execute(ctx, task, ideClient); err != nil {
+					log.Printf("Agent %s failed: %v", agent.Name, err)
+					// Continue with other agents even if one fails
+				}
+				break
+			}
+		}
+		
+		// Show progress
+		fmt.Printf("  Progress: %d/%d tasks completed\n", i+1, len(tasks))
+	}
+	
+	return nil
+}
+
+func main() {
+	// Parse command line arguments
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go \"<task description>\"")
+		fmt.Println("Example: go run main.go \"Create a user authentication system with JWT tokens\"")
+		os.Exit(1)
+	}
+	
+	taskDescription := strings.Join(os.Args[1:], " ")
+	
+	// Initialize IDE client
+	ideClient := &IDEClient{BaseURL: "http://localhost:8085"}
+	
+	fmt.Println("╔══════════════════════════════════════════════════════════╗")
+	fmt.Println("║     MIOSA Multi-Agent LLM-Powered Code Generation        ║")
+	fmt.Println("╚══════════════════════════════════════════════════════════╝")
+	fmt.Println()
+	fmt.Printf("📋 Task: %s\n", taskDescription)
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	
+	// Orchestrate agents
+	if err := OrchestrateAgents(ctx, taskDescription, ideClient); err != nil {
+		log.Printf("Orchestration failed: %v", err)
+	}
+	
+	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("✅ Multi-Agent Code Generation Complete!")
+	fmt.Println("\n🎯 Next steps:")
+	fmt.Println("   1. Review generated code in IDE at http://localhost:3000/ide")
+	fmt.Println("   2. Files are organized by agent type in respective directories")
+	fmt.Println("   3. Integrate generated code into your project")
+	fmt.Println("\n💡 Tips:")
+	fmt.Println("   • Set GROQ_API_KEY for LLM-powered generation")
+	fmt.Println("   • Each agent specializes in its domain")
+	fmt.Println("   • Agents collaborate to create complete solutions")
+}

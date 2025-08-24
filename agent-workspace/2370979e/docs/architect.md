@@ -1,0 +1,1 @@
+Architecture design for: Create a microservices-based e-commerce platform with product catalog service (Go), order service (Python), payment service (Node.js), user service (Java), and API gateway. Include Kubernetes manifests, service mesh configuration, and monitoring setup.

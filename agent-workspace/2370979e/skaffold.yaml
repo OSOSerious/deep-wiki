@@ -1,0 +1,28 @@
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: ecommerce
+build:
+  artifacts:
+  - image: ghcr.io/acme/product-catalog
+    context: services/product-catalog
+  - image: ghcr.io/acme/order-service
+    context: services/order
+  - image: ghcr.io/acme/payment-service
+    context: services/payment
+  - image: ghcr.io/acme/user-service
+    context: services/user
+  - image: ghcr.io/acme/api-gateway
+    context: services/api-gateway
+deploy:
+  kubectl:
+    manifests:
+    - k8s/namespace.yaml
+    - k8s/postgres.yaml
+    - k8s/product-catalog.yaml
+    - k8s/order-service.yaml
+    - k8s/payment-service.yaml
+    - k8s/user-service.yaml
+    - k8s/api-gateway.yaml
+    - k8s/istio/*.yaml
+    - k8s/monitoring/*.yaml

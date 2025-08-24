@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-catalog
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: product-catalog }
+  template:
+    metadata:
+      labels: { app: product-catalog }
+    spec:
+      containers:
+      - name: product-catalog
+        image: ghcr.io/acme/product-catalog:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DATABASE_URL
+          value: "postgres://catalog_user:catalog_pass@postgres:5432/product_catalog?sslmode=disable"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-catalog
+  namespace: ecommerce
+spec:
+  selector: { app: product-catalog }
+  ports:
+  - port: 8080
+    targetPort: 8080

@@ -1,0 +1,1 @@
+Architecture design for: Build a complete e-commerce platform with user authentication, product catalog, shopping cart, payment processing, inventory management, order tracking, and admin dashboard. Include microservices architecture, API documentation, deployment scripts, monitoring setup, and comprehensive testing.
