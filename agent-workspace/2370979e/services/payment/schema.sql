@@ -1,8 +1,0 @@
-CREATE TABLE IF NOT EXISTS payments (
-  id SERIAL PRIMARY KEY,
-  order_id INT NOT NULL,
-  amount NUMERIC(10,2) NOT NULL,
-  currency VARCHAR(3) NOT NULL,
-  status VARCHAR(20) NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
-);

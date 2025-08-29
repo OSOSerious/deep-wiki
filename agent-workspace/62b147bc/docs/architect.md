@@ -1,1 +1,0 @@
-Architecture design for: Build a real-time chat application with WebSocket support, user authentication, message history, typing indicators, online presence, file sharing, and emoji reactions. Include backend API, frontend UI, database schema, Docker setup, and tests.
