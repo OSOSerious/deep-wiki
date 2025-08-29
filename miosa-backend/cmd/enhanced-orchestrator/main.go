@@ -414,7 +414,7 @@ func (o *EnhancedOrchestrator) extractSection(content, section string) string {
 
 // detectLanguage detects programming language from code
 func (o *EnhancedOrchestrator) triggerE2BWorkflow(projectPath string) {
-	e2bServerURL := "http://localhost:3000" // The Node.js server
+	e2bServerURL := "http://localhost:3001" // The Node.js server
 	o.logger.Info("Triggering E2B workflow", zap.String("path", projectPath))
 
 	payload := map[string]string{"path": projectPath}

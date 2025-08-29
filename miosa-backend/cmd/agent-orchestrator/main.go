@@ -428,8 +428,8 @@ func (o *Orchestrator) triggerE2BWorkflow(workspacePath string) {
 		return
 	}
 
-	// E2B JS server is running on port 3000
-	resp, err := http.Post("http://localhost:3000", "application/json", bytes.NewBuffer(jsonPayload))
+	// E2B JS server is running on port 3001
+	resp, err := http.Post("http://localhost:3001", "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		log.Printf("Error calling E2B server: %v", err)
 		return
