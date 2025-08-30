@@ -23,14 +23,14 @@ import (
 type AgentType string
 
 const (
-	OrchestratorAgent  AgentType = "orchestrator"
-	AnalysisAgent      AgentType = "analysis"
-	ArchitectAgent     AgentType = "architect"
-	DevelopmentAgent   AgentType = "development"
-	TestingAgent       AgentType = "testing"
-	QualityAgent       AgentType = "quality"
-	DeploymentAgent    AgentType = "deployment"
-	MonitoringAgent    AgentType = "monitoring"
+	OrchestratorAgent AgentType = "orchestrator"
+	AnalysisAgent     AgentType = "analysis"
+	ArchitectAgent    AgentType = "architect"
+	DevelopmentAgent  AgentType = "development"
+	TestingAgent      AgentType = "testing"
+	QualityAgent      AgentType = "quality"
+	DeploymentAgent   AgentType = "deployment"
+	MonitoringAgent   AgentType = "monitoring"
 )
 
 // Task represents a task for an agent
@@ -139,7 +139,7 @@ type LLMClient struct {
 // CallLLM makes a request to the LLM
 func (l *LLMClient) CallLLM(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
 	url := "https://api.groq.com/openai/v1/chat/completions"
-	
+
 	// Use simple message structure for API
 	messages := []map[string]string{
 		{"role": "system", "content": systemPrompt},
@@ -147,10 +147,10 @@ func (l *LLMClient) CallLLM(ctx context.Context, systemPrompt, userPrompt string
 	}
 
 	requestBody := map[string]interface{}{
-		"model": "llama3-70b-8192",
-		"messages": messages,
+		"model":       "llama3-70b-8192",
+		"messages":    messages,
 		"temperature": 0.7,
-		"max_tokens": 3000,
+		"max_tokens":  3000,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -213,7 +213,7 @@ func (a *AnalysisAgentImpl) GetCapabilities() []string {
 
 func (a *AnalysisAgentImpl) Execute(ctx context.Context, task Task) (*Result, error) {
 	start := time.Now()
-	
+
 	systemPrompt := `You are an Analysis Agent specializing in software requirements analysis.
 Your role is to:
 1. Analyze the given requirements thoroughly
@@ -235,8 +235,9 @@ Format your response as a structured markdown document with clear sections.`
 
 	// Save analysis document
 	fileName := fmt.Sprintf("analysis_%s.md", task.ID.String()[:8])
-	filePath := filepath.Join("/Users/ososerious/OSA/agent-workspace/docs", fileName)
-	
+	wsPath, _ := os.Getwd()
+	filePath := filepath.Join(wsPath, "agent-workspace", "docs", fileName)
+
 	if err := a.IDEClient.SaveFile(filePath, response); err != nil {
 		log.Printf("Failed to save analysis: %v", err)
 	}
@@ -267,7 +268,7 @@ func (a *ArchitectAgentImpl) GetCapabilities() []string {
 
 func (a *ArchitectAgentImpl) Execute(ctx context.Context, task Task) (*Result, error) {
 	start := time.Now()
-	
+
 	systemPrompt := `You are an Architecture Agent specializing in system design.
 Your role is to:
 1. Design data models and structures
@@ -289,11 +290,12 @@ Include comments explaining design decisions.`
 
 	// Extract code from response
 	code := extractCode(response)
-	
+
 	// Save model file
 	fileName := fmt.Sprintf("model_%s.go", task.ID.String()[:8])
-	filePath := filepath.Join("/Users/ososerious/OSA/agent-workspace/models", fileName)
-	
+	wsPath, _ := os.Getwd()
+	filePath := filepath.Join(wsPath, "agent-workspace", "models", fileName)
+
 	if err := a.IDEClient.SaveFile(filePath, code); err != nil {
 		log.Printf("Failed to save model: %v", err)
 	}
@@ -324,7 +326,7 @@ func (a *DevelopmentAgentImpl) GetCapabilities() []string {
 
 func (a *DevelopmentAgentImpl) Execute(ctx context.Context, task Task) (*Result, error) {
 	start := time.Now()
-	
+
 	systemPrompt := `You are a Development Agent specializing in Go implementation.
 Your role is to:
 1. Implement complete API handlers
@@ -346,11 +348,12 @@ Generate production-ready Go code with all necessary imports.`
 
 	// Extract code from response
 	code := extractCode(response)
-	
+
 	// Save handler file
 	fileName := fmt.Sprintf("handler_%s.go", task.ID.String()[:8])
-	filePath := filepath.Join("/Users/ososerious/OSA/agent-workspace/handlers", fileName)
-	
+	wsPath, _ := os.Getwd()
+	filePath := filepath.Join(wsPath, "agent-workspace", "handlers", fileName)
+
 	if err := a.IDEClient.SaveFile(filePath, code); err != nil {
 		log.Printf("Failed to save handler: %v", err)
 	}
@@ -377,9 +380,9 @@ type Orchestrator struct {
 func NewOrchestrator(apiKey string, ideEndpoint string) *Orchestrator {
 	ideClient := &IDEClient{BaseURL: ideEndpoint}
 	llmClient := &LLMClient{APIKey: apiKey}
-	
+
 	agents := make(map[AgentType]Agent)
-	
+
 	// Initialize agents
 	agents[AnalysisAgent] = &AnalysisAgentImpl{
 		BaseAgent: BaseAgent{
@@ -389,7 +392,7 @@ func NewOrchestrator(apiKey string, ideEndpoint string) *Orchestrator {
 		},
 		llm: llmClient,
 	}
-	
+
 	agents[ArchitectAgent] = &ArchitectAgentImpl{
 		BaseAgent: BaseAgent{
 			Type:      ArchitectAgent,
@@ -398,7 +401,7 @@ func NewOrchestrator(apiKey string, ideEndpoint string) *Orchestrator {
 		},
 		llm: llmClient,
 	}
-	
+
 	agents[DevelopmentAgent] = &DevelopmentAgentImpl{
 		BaseAgent: BaseAgent{
 			Type:      DevelopmentAgent,
@@ -407,7 +410,7 @@ func NewOrchestrator(apiKey string, ideEndpoint string) *Orchestrator {
 		},
 		llm: llmClient,
 	}
-	
+
 	return &Orchestrator{
 		agents:    agents,
 		ideClient: ideClient,
@@ -415,10 +418,38 @@ func NewOrchestrator(apiKey string, ideEndpoint string) *Orchestrator {
 }
 
 // ExecuteTask orchestrates task execution across agents
+func (o *Orchestrator) triggerE2BWorkflow(workspacePath string) {
+	log.Printf("Triggering E2B workflow for path: %s", workspacePath)
+
+	payload := map[string]string{"path": workspacePath}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshalling E2B payload: %v", err)
+		return
+	}
+
+	// E2B JS server is running on port 3001
+	resp, err := http.Post("http://localhost:3001", "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		log.Printf("Error calling E2B server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("E2B server returned an error: %s", string(body))
+		return
+	}
+
+	log.Println("Successfully triggered E2B workflow.")
+}
+
+// ExecuteTask orchestrates task execution across agents
 func (o *Orchestrator) ExecuteTask(ctx context.Context, description string) (*WorkflowResult, error) {
 	workflowID := uuid.New()
 	results := make([]*Result, 0)
-	
+
 	// Create initial task
 	task := Task{
 		ID:          workflowID,
@@ -431,41 +462,50 @@ func (o *Orchestrator) ExecuteTask(ctx context.Context, description string) (*Wo
 			IDEEndpoint: o.ideClient.BaseURL,
 		},
 	}
-	
+
 	// Start with analysis agent
 	currentAgent := AnalysisAgent
-	
+
 	for i := 0; i < 5; i++ { // Max 5 agent hops
 		agent, exists := o.agents[currentAgent]
 		if !exists {
 			break
 		}
-		
+
 		log.Printf("> Executing %s agent...", currentAgent)
-		
+
 		result, err := agent.Execute(ctx, task)
 		if err != nil {
 			return nil, fmt.Errorf("agent %s failed: %w", currentAgent, err)
 		}
-		
+
 		results = append(results, result)
-		
+
 		// Update task context with result
 		if task.Context.Memory == nil {
 			task.Context.Memory = make(map[string]interface{})
 		}
 		task.Context.Memory[string(currentAgent)] = result.Output
-		
+
 		// Move to next agent if specified
 		if result.NextAgent == "" {
 			break
 		}
 		currentAgent = result.NextAgent
-		
+
 		// Update task for next agent
 		task.Context.Phase = string(currentAgent)
 	}
-	
+
+	log.Printf("> Calling the Nodejs server for e2b")
+	wsPath, err := os.Getwd()
+	if err != nil {
+		log.Printf("Error getting current directory: %v", err)
+	} else {
+		workspaceDir := filepath.Join(wsPath, "agent-workspace")
+		o.triggerE2BWorkflow(workspaceDir)
+	}
+
 	return &WorkflowResult{
 		WorkflowID: workflowID,
 		Results:    results,
@@ -527,33 +567,33 @@ func (s *Server) handleOrchestrate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Description string `json:"description"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	
+
 	ctx := context.Background()
 	result, err := s.orchestrator.ExecuteTask(ctx, req.Description)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	agents := []map[string]interface{}{}
-	
+
 	for agentType, agent := range s.orchestrator.agents {
 		agents = append(agents, map[string]interface{}{
 			"type":         agentType,
 			"capabilities": agent.GetCapabilities(),
 		})
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(agents)
 }
@@ -569,22 +609,22 @@ func main() {
 		ideURL = flag.String("ide", "http://localhost:8085", "IDE server URL")
 	)
 	flag.Parse()
-	
+
 	apiKey := os.Getenv("GROQ_API_KEY")
 	if apiKey == "" {
 		log.Fatal("GROQ_API_KEY environment variable is required")
 	}
-	
+
 	// Create orchestrator
 	orchestrator := NewOrchestrator(apiKey, *ideURL)
-	
+
 	// Create and start server
 	server := NewServer(orchestrator)
-	
+
 	log.Printf("[ORCHESTRATOR] Starting on port %s", *port)
 	log.Printf("[IDE] Endpoint: %s", *ideURL)
 	log.Printf("[STATUS] Ready to orchestrate agent workflows!")
-	
+
 	if err := http.ListenAndServe(":"+*port, server.router); err != nil {
 		log.Fatal(err)
 	}

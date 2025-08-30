@@ -132,7 +132,16 @@ GROQ_API_KEY=$GROQ_API_KEY go run cmd/full-orchestrator/main.go \
 - Comprehensive solution generation
 - Complete documentation and deployment configs
 
-#### 4. Web Interface (Port 3000)
+#### 4. E2B GitHub Push Service (Port 3001)
+```bash
+cd miosa-backend
+node e2b.js
+```
+- Node.js server that receives the generated code path.
+- Creates an E2B sandbox and pushes the code to a new GitHub repository.
+- Access at: **http://localhost:3001**
+
+#### 5. Web Interface (Port 3000)
 ```bash
 cd miosa-web
 npm run dev

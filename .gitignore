@@ -22,7 +22,8 @@ node_modules/
 *.sw?
 
 # OS specific
-.DS_Store
+.DS_Store/logs
+agent-workspace/*
 
 # Task Master files
 .taskmaster/

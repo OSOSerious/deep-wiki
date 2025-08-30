@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"io"
 	"github.com/sormind/OSA/miosa-backend/internal/agents"
 	"github.com/sormind/OSA/miosa-backend/internal/agents/ai_providers"
 	"github.com/sormind/OSA/miosa-backend/internal/agents/analysis"
@@ -240,6 +242,9 @@ func (o *EnhancedOrchestrator) ExecuteWorkflow(ctx context.Context, description 
 		task.Context.Memory[string(agentType)] = result.Output
 	}
 
+	projectDir := filepath.Join(o.workspaceDir, workflowID.String()[:8])
+	o.triggerE2BWorkflow(projectDir)
+
 	return &WorkflowResult{
 		WorkflowID: workflowID,
 		Results:    results,
@@ -405,6 +410,34 @@ func (o *EnhancedOrchestrator) extractSection(content, section string) string {
 	}
 	
 	return strings.Join(result, "\n")
+}
+
+// detectLanguage detects programming language from code
+func (o *EnhancedOrchestrator) triggerE2BWorkflow(projectPath string) {
+	e2bServerURL := "http://localhost:3001" // The Node.js server
+	o.logger.Info("Triggering E2B workflow", zap.String("path", projectPath))
+
+	payload := map[string]string{"path": projectPath}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		o.logger.Error("Error creating JSON payload for E2B server", zap.Error(err))
+		return
+	}
+
+	resp, err := http.Post(e2bServerURL, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		o.logger.Error("Error calling E2B server", zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		o.logger.Error("E2B server returned non-OK status", zap.String("status", resp.Status), zap.String("body", string(body)))
+		return
+	}
+
+	o.logger.Info("Successfully triggered E2B workflow.")
 }
 
 // detectLanguage detects programming language from code
