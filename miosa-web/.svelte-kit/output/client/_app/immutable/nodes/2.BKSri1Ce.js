@@ -1,1 +1,0 @@
-import"../chunks/Bzak7iHL.js";import"../chunks/69_IOA4Y.js";import{W as o,Z as r}from"../chunks/DZBN8ks5.js";var s=o('<div style="padding: 1rem; font-family: system-ui, sans-serif;"><h1>Welcome to MIOSA</h1> <p>The frontend is up. Edit src/routes/+page.svelte to get started.</p></div>');function m(t){var e=s();r(t,e)}export{m as component};
